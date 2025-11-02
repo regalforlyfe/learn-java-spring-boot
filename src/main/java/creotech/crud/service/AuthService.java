@@ -5,49 +5,49 @@ import creotech.crud.model.LoginRequest;
 import creotech.crud.model.RegisterUserRequest;
 import creotech.crud.model.UserResponse;
 import creotech.crud.repository.AuthRepository;
-import creotech.crud.security.BCrypt;
 import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.UUID;
 
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
-    @Autowired
-    private AuthRepository authRepository;
-
-    @Autowired
-    private ValidationService validationService;
+    private final AuthRepository authRepository;
+    private final ValidationService validationService;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
     public void register(RegisterUserRequest request) {
         validationService.validate(request);
 
-        // karena primary key-nya uuid, kita harus cek email lewat repository custom
-        if (authRepository.existsByEmail(request.getEmail())) {
+        // record accessor → email() / name() / password()
+        if (authRepository.existsByEmail(request.email())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already registered");
         }
 
         User user = new User();
         user.setUuid(UUID.randomUUID().toString());
-        user.setName(request.getName());
-        user.setEmail(request.getEmail());
-        user.setPassword(BCrypt.hashpw(request.getPassword(), BCrypt.gensalt()));
+        user.setName(request.name());
+        user.setEmail(request.email());
+        user.setPassword(passwordEncoder.encode(request.password()));
 
         authRepository.save(user);
     }
 
+    @Transactional
     public UserResponse login(LoginRequest request) {
         validationService.validate(request);
 
-        User user = authRepository.findFirstByEmail(request.getEmail())
+        User user = authRepository.findFirstByEmail(request.email())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Username or password wrong"));
 
-        if (!BCrypt.checkpw(request.getPassword(), user.getPassword())) {
+        if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Username or password wrong");
         }
 
@@ -55,13 +55,21 @@ public class AuthService {
         user.setTokenExpiredAt(next30Days());
         authRepository.save(user);
 
-        return UserResponse.builder()
-                .uuid(user.getUuid())
-                .email(user.getEmail())
-                .name(user.getName())
-                .token(user.getToken())
-                .tokenExpiredAt(user.getTokenExpiredAt())
-                .build();
+        // Ganti builder dengan constructor record atau helper
+        return toResponse(user);
+    }
+
+    private UserResponse toResponse(User u) {
+        // Sesuaikan urutan argumen dengan definisi record UserResponse kamu
+        return new UserResponse(
+                u.getUuid(),
+                u.getEmail(),
+                u.getName(),
+                u.getToken(),
+                u.getTokenExpiredAt(),
+                u.getCreatedAt(),
+                u.getUpdatedAt()
+        );
     }
 
     private Long next30Days() {

@@ -1,25 +1,23 @@
 package creotech.crud.model;
 
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
 @Data
 @AllArgsConstructor
-@NoArgsConstructor
-@Builder
 public class GeneralResponse<T> {
+    private T data;
+    private Object errors;
+    private LocalDateTime timestamp;
 
-    private String status;        // "success" atau "error"
+    // helper static biar gak ngetik panjang tiap kali
+    public static <T> GeneralResponse<T> success(T data) {
+        return new GeneralResponse<>(data, null, LocalDateTime.now());
+    }
 
-    private String message;       // pesan yang bisa dibaca manusia
-
-    private T data;               // payload utama
-
-    private Object errors;        // bisa String atau map validasi
-
-    private LocalDateTime timestamp; // biar tau kapan response dikirim
+    public static <T> GeneralResponse<T> error(Object errors) {
+        return new GeneralResponse<>(null, errors, LocalDateTime.now());
+    }
 }
